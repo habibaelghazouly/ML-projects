@@ -3,3 +3,7 @@
 
 # Ignore Jupyter notebook checkpoints
 .ipynb_checkpoints/
+
+# Ignore dataset directories (raw data not meant to be committed)
+/data/
+/data/MNIST/raw/
