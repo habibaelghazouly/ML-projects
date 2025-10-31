@@ -1,11 +1,27 @@
 import numpy as np
 import torch
+from .helpers import save_checkpoint, load_checkpoint
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, epochs=10, device='cpu'):
+
+def train_model(
+    model,
+    train_loader,
+    val_loader,
+    criterion,
+    optimizer,
+    epochs=10,
+    device="cpu",
+    early_stopping_patience=3,
+    min_delta=0.001,
+    checkpoint_path=None,
+):
     train_loss_mean, train_loss_std = [], []
     val_loss_mean, val_loss_std = [], []
     train_acc_mean, train_acc_std = [], []
     val_acc_mean, val_acc_std = [], []
+
+    best_val_loss = float("inf")
+    patience_counter = 0
 
     for epoch in range(epochs):
         model.train()
@@ -46,19 +62,42 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, epochs=10
         val_acc_mean.append(np.mean(batch_val_accs))
         val_acc_std.append(np.std(batch_val_accs))
 
-        print(f"Epoch {epoch+1}/{epochs} | "
-              f"Train Loss: {train_loss_mean[-1]:.4f} | "
-              f"Train Acc: {train_acc_mean[-1]*100:.2f}% | "
-              f"Val Loss: {val_loss_mean[-1]:.4f} | "
-              f"Val Acc: {val_acc_mean[-1]*100:.2f}%")
+        print(
+            f"Epoch {epoch+1}/{epochs} | "
+            f"Train Loss: {train_loss_mean[-1]:.4f} | "
+            f"Train Acc: {train_acc_mean[-1]*100:.2f}% | "
+            f"Val Loss: {val_loss_mean[-1]:.4f} | "
+            f"Val Acc: {val_acc_mean[-1]*100:.2f}%"
+        )
 
-    return {
-        "train_loss_mean": train_loss_mean,
-        "train_loss_std": train_loss_std,
-        "train_acc_mean": train_acc_mean,
-        "train_acc_std": train_acc_std,
-        "val_loss_mean": val_loss_mean,
-        "val_loss_std": val_loss_std,
-        "val_acc_mean": val_acc_mean,
-        "val_acc_std": val_acc_std,
-    }
+        history = {
+            "train_loss_mean": train_loss_mean,
+            "train_loss_std": train_loss_std,
+            "train_acc_mean": train_acc_mean,
+            "train_acc_std": train_acc_std,
+            "val_loss_mean": val_loss_mean,
+            "val_loss_std": val_loss_std,
+            "val_acc_mean": val_acc_mean,
+            "val_acc_std": val_acc_std,
+        }
+
+        # Early Stopping
+        current_val_loss = val_loss_mean[-1]
+        if best_val_loss - current_val_loss > min_delta:
+            best_val_loss = current_val_loss
+            patience_counter = 0  # reset patience
+            print(f"New best model found (val_loss={best_val_loss:.4f})")
+
+            # Save best model checkpoint
+            if checkpoint_path:
+                save_checkpoint(model, optimizer, epochs, history, checkpoint_path)
+        else:
+            patience_counter += 1
+            print(
+                f"No improvement. Patience: {patience_counter}/{early_stopping_patience}"
+            )
+
+            if patience_counter >= early_stopping_patience:
+                print("Early stopping triggered!")
+                break
+    return history
