@@ -5,8 +5,11 @@
 .ipynb_checkpoints/
 
 # Ignore dataset directories (raw data not meant to be committed)
-/data/
-/data/MNIST/raw/
+MNIST/data/
+MNIST/raw/
 
 # Ignore environment
 /ml_env/
+
+# Ignore pycache files
+MNIST/src/__pycache__/*.pyc
