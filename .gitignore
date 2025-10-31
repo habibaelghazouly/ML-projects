@@ -7,3 +7,6 @@
 # Ignore dataset directories (raw data not meant to be committed)
 /data/
 /data/MNIST/raw/
+
+# Ignore environment
+/ml_env/
