@@ -11,5 +11,11 @@ MNIST/raw/
 # Ignore environment
 /ml_env/
 
-# Ignore pycache files
-MNIST/src/__pycache__/*.pyc
+# Ignore pycache files (ignore __pycache__ directories everywhere)
+**/__pycache__/
+*.pyc
+MNIST/src/NNs/__pycache__/
+# Ignore model checkpoints
+MNIST/models/checkpoints/  
+*.pt
+*.pth
