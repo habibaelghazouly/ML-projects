@@ -25,3 +25,14 @@ def load_checkpoint(model, optimizer, path, device="cpu"):
     model.to(device)
     print(f"Checkpoint loaded from {path}, resuming at epoch {start_epoch}")
     return model, optimizer, start_epoch, history
+
+def get_gradients(model,criterion,inputs,targets):
+    model.zero_grad()
+    outputs = model(inputs)
+    loss = criterion(outputs, targets)
+    loss.backward()
+    gradients = []
+    for param in model.parameters():
+        if param.grad is not None:
+            gradients.append(param.grad.clone().view(-1))
+    return gradients
