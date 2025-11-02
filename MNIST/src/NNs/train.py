@@ -3,7 +3,7 @@ import torch
 from .helpers import save_checkpoint, load_checkpoint
 
 
-def train_model(
+def train_model_nn(
     model,
     train_loader,
     val_loader,

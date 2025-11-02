@@ -11,7 +11,7 @@ MNIST/src/Linear Classification Models/data/
 MNIST/src/Linear Classification Models/__pycache__/
 
 # Ignore environment
-/ml_env/
+ml_env/
 
 # Ignore pycache files (ignore __pycache__ directories everywhere)
 **/__pycache__/

@@ -4,11 +4,15 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score
 
 
-def train_model(model, train_loader, val_loader, epochs, lr, device, loss_fn, binary=False):
+def train_model(model, train_loader, val_loader, epochs, lr, device, loss_fn, binary=False, patience=3):
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     model.to(device)
 
     train_losses, val_losses, train_accs, val_accs = [], [], [], []
+
+    best_val_loss = float('inf')
+    patience_counter = 0
+    best_model_state = None
 
     for epoch in range(epochs):
         model.train()
@@ -46,6 +50,18 @@ def train_model(model, train_loader, val_loader, epochs, lr, device, loss_fn, bi
         print(f"Epoch [{epoch+1}/{epochs}] "
               f"Train Loss: {train_losses[-1]:.4f}, Val Loss: {val_losses[-1]:.4f}, "
               f"Train Acc: {train_accs[-1]:.4f}, Val Acc: {val_accs[-1]:.4f}")
+
+        
+        if val_loss < best_val_loss - 1e-4:
+            best_val_loss = val_loss
+            patience_counter = 0
+            best_model_state = model.state_dict()
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f"Early stopping triggered at epoch {epoch+1}.")
+                model.load_state_dict(best_model_state)
+                break
 
     return train_losses, val_losses, train_accs, val_accs
 
