@@ -7,3 +7,5 @@ from .Linear_Classification.logistic_regression import LogisticRegressionModel
 from .Linear_Classification.softmax_regression import SoftmaxRegressionModel
 from .Linear_Classification.train import train_model, test_model
 from .Linear_Classification.utils import plot_curves, print_confusion_matrix
+from .CNN.model import CNNModel
+from .CNN.train import train_model_cnn
