@@ -15,6 +15,6 @@ This repository contains multiple Machine Learning projects implemented in Pytho
 ### 5. Probabilistic Gaussian Generative Classifier :
  **Dataset:** ([Handwritten Digits from sklearn.datasets.load_digits()])
 ### 6. Naïve Bayes  
- **Dataset:** ([Adult Income Dataset (Census Income)]((https://www.kaggle.com/datasets/uciml/adult-census-income)))
+ **Dataset:** ([Adult Income Dataset (Census Income)](https://www.kaggle.com/datasets/uciml/adult-census-income))
 ### 7. Decision Trees & Random Forest :
  **Dataset:** ([Breast Cancer Wisconsin (Diagnostic) from sklearn.datasets.load_breast_cancer().])
