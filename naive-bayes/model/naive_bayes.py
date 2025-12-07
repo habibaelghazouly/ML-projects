@@ -63,6 +63,17 @@ class NaiveBayes:
                 prob[i , :] = log_scores
 
         return prob
+    
+    def probs(self, x):
+        log_prob = self.predict_prob(x)
+        # Convert back to probabilities using log-sum-exp trick
+        # Subtract max for numerical stability
+        log_prob_normalized = log_prob - np.max(log_prob, axis=1, keepdims=True)
+        prob = np.exp(log_prob_normalized)
+        # Normalize to sum to 1
+        prob = prob / np.sum(prob, axis=1, keepdims=True)
+        
+        return prob
         
     def predict(self, x):
             prob = self.predict_prob(x)
