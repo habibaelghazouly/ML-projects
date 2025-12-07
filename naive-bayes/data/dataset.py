@@ -5,8 +5,7 @@ from sklearn.model_selection import train_test_split
 def load_adult_dataset(path: str = None):
 
     # Load dataset
-    csv_path = path
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(path)
 
     # Target column 
     target_col = "income"

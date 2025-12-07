@@ -11,7 +11,7 @@ class NaiveBayes:
         self.class_priors = {}
         self.feature_likelihoods = {}
 
-        self.feature_counts = {} # kam mara each feature value appears per class
+        self.feature_counts = {} # count each feature value appears per class
         self.feature_value_counts = {} # total counts of feature values per class
         self.classes = None
         self.class_count = defaultdict(int)
@@ -32,8 +32,8 @@ class NaiveBayes:
             self.feature_counts[f] = {}
             self.feature_value_counts[f] = len(values)
 
+            # calculate counts per class for feature f value v => needed in the likelihood
             for c in self.classes:
-
                 counts  = defaultdict(int)
 
                 for v in values:
@@ -49,18 +49,20 @@ class NaiveBayes:
         return likelihood
         
     def predict_prob(self, x):
-        n_samples , n_features = x.shape
+        n_samples, n_features = x.shape
         prob = np.zeros((n_samples, len(self.classes)))
 
-        for i , row in enumerate(x):
-            log_scores = []
-            for j , c in enumerate(self.classes):
-                log_prob = np.log(self.class_priors[c])
+        for i, row in enumerate(x):
+            class_probs = []
+            for c in self.classes:
+                p = self.class_priors[c]
 
                 for f in range(n_features):
-                    log_prob += np.log(self.feature_likelihood(f, row[f], c))    
-                log_scores.append(log_prob)
-                prob[i , :] = log_scores
+                    p *= self.feature_likelihood(f, row[f], c)
+            
+                class_probs.append(p)
+        
+            prob[i, :] = class_probs
 
         return prob
         
