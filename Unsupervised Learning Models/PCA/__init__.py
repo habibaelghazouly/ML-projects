@@ -1,1 +1,1 @@
-from .pca_numpy import PCA
+from .PCA import PCA

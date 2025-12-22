@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.cluster import KMeans
 
 
 class GMM:
@@ -26,33 +27,59 @@ class GMM:
         if self.K > n_samples:
             raise ValueError("Number of components cannot exceed number of samples")
 
-        # Initialize means randomly from data
-        indices = np.random.choice(n_samples, self.K, replace=False)
-        self.means_ = X[indices]
+        # Use KMeans to initialize means
+        kmeans = KMeans(n_clusters=self.K, random_state=self.random_state, n_init=10)
+        labels = kmeans.fit_predict(X)
+        self.means_ = kmeans.cluster_centers_
 
-        # Mixing coefficients
-        self.weights_ = np.ones(self.K) / self.K
+        # Initialize weights based on cluster sizes
+        self.weights_ = np.array([np.mean(labels == k) for k in range(self.K)])
 
-        # Covariances
+        # Initialize covariances
         if self.covariance_type == "full":
-            self.covariances_ = np.array(
-                [
-                    np.cov(X, rowvar=False) + self.reg_covar * np.eye(n_features)
-                    for _ in range(self.K)
-                ]
-            )
+            covariances = []
+            for k in range(self.K):
+                cluster_points = X[labels == k]
+                if cluster_points.shape[0] == 0:  # fallback if cluster empty
+                    cov = np.cov(X, rowvar=False) + self.reg_covar * np.eye(n_features)
+                else:
+                    cov = np.cov(
+                        cluster_points, rowvar=False
+                    ) + self.reg_covar * np.eye(n_features)
+                covariances.append(cov)
+            self.covariances_ = np.array(covariances)
+
         elif self.covariance_type == "tied":
-            self.covariances_ = np.cov(X, rowvar=False) + self.reg_covar * np.eye(
-                n_features
-            )
+            cov = np.zeros((n_features, n_features))
+            for k in range(self.K):
+                cluster_points = X[labels == k]
+                if cluster_points.shape[0] == 0:
+                    cluster_points = X
+                diff = cluster_points - np.mean(cluster_points, axis=0)
+                cov += diff.T @ diff
+            cov /= n_samples
+            cov += self.reg_covar * np.eye(n_features)
+            self.covariances_ = cov
+
         elif self.covariance_type == "diag":
-            self.covariances_ = np.tile(np.var(X, axis=0) + self.reg_covar, (self.K, 1))
+            covariances = np.zeros((self.K, n_features))
+            for k in range(self.K):
+                cluster_points = X[labels == k]
+                if cluster_points.shape[0] == 0:
+                    cluster_points = X
+                covariances[k] = np.var(cluster_points, axis=0) + self.reg_covar
+            self.covariances_ = covariances
+
         elif self.covariance_type == "spherical":
-            self.covariances_ = np.ones(self.K) * (
-                np.mean(np.var(X, axis=0)) + self.reg_covar
-            )
-        else:
-            raise ValueError("Invalid covariance type")
+            covariances = np.zeros(self.K)
+            for k in range(self.K):
+                cluster_points = X[labels == k]
+                if cluster_points.shape[0] == 0:
+                    cluster_points = X
+                covariances[k] = (
+                    np.mean(np.var(cluster_points, axis=0)) + self.reg_covar
+                )
+            self.covariances_ = covariances
 
     # ---------- Gaussian log-density ----------
     def _log_gaussian(self, X, k):
@@ -61,12 +88,7 @@ class GMM:
 
         if self.covariance_type == "full":
             cov = self.covariances_[k]
-            # Ensure positive definite
-            cov += self.reg_covar * np.eye(n_features)
-            try:
-                chol = np.linalg.cholesky(cov)
-            except np.linalg.LinAlgError:
-                chol = np.linalg.cholesky(cov + self.reg_covar * np.eye(n_features))
+            chol = np.linalg.cholesky(cov)
             inv = np.linalg.inv(cov)
             log_det = 2 * np.sum(np.log(np.diag(chol)))
             return -0.5 * (
@@ -77,7 +99,6 @@ class GMM:
 
         elif self.covariance_type == "tied":
             cov = self.covariances_
-            cov += self.reg_covar * np.eye(n_features)
             chol = np.linalg.cholesky(cov)
             inv = np.linalg.inv(cov)
             log_det = 2 * np.sum(np.log(np.diag(chol)))
@@ -88,7 +109,7 @@ class GMM:
             )
 
         elif self.covariance_type == "diag":
-            cov = self.covariances_[k] + self.reg_covar
+            cov = self.covariances_[k]
             return -0.5 * (
                 np.sum((diff**2) / cov, axis=1)
                 + np.sum(np.log(cov))
@@ -96,7 +117,7 @@ class GMM:
             )
 
         elif self.covariance_type == "spherical":
-            var = self.covariances_[k] + self.reg_covar
+            var = self.covariances_[k]
             return -0.5 * (
                 np.sum(diff**2, axis=1) / var
                 + n_features * np.log(var)
@@ -107,9 +128,7 @@ class GMM:
     def _e_step(self, X):
         log_prob = np.zeros((X.shape[0], self.K))
         for k in range(self.K):
-            log_prob[:, k] = np.log(self.weights_[k] + 1e-16) + self._log_gaussian(
-                X, k
-            )  # avoid log(0)
+            log_prob[:, k] = np.log(self.weights_[k] + 1e-16) + self._log_gaussian(X, k)
         log_sum = np.logaddexp.reduce(log_prob, axis=1)
         responsibilities = np.exp(log_prob - log_sum[:, np.newaxis])
         return responsibilities, np.sum(log_sum)
@@ -117,12 +136,10 @@ class GMM:
     # ---------- M-step ----------
     def _m_step(self, X, resp):
         n_samples, n_features = X.shape
-        Nk = np.sum(resp, axis=0) + 1e-16  # avoid division by zero
+        Nk = np.sum(resp, axis=0) + 1e-16
 
-        # Update weights
+        # Update weights and means
         self.weights_ = Nk / n_samples
-
-        # Update means
         self.means_ = (resp.T @ X) / Nk[:, np.newaxis]
 
         # Update covariances
@@ -130,7 +147,7 @@ class GMM:
             covariances = []
             for k in range(self.K):
                 diff = X - self.means_[k]
-                cov = (resp[:, k][:, None] * diff).T @ diff / Nk[k]
+                cov = (diff.T @ (resp[:, k][:, None] * diff)) / Nk[k]
                 cov += self.reg_covar * np.eye(n_features)
                 covariances.append(cov)
             self.covariances_ = np.array(covariances)
@@ -139,7 +156,7 @@ class GMM:
             cov = np.zeros((n_features, n_features))
             for k in range(self.K):
                 diff = X - self.means_[k]
-                cov += (resp[:, k][:, None] * diff).T @ diff
+                cov += diff.T @ (resp[:, k][:, None] * diff)
             cov /= n_samples
             cov += self.reg_covar * np.eye(n_features)
             self.covariances_ = cov
@@ -162,7 +179,7 @@ class GMM:
                 ) + self.reg_covar
             self.covariances_ = covariances
 
-    # ---------- Training ----------
+    # ---------- Fit ----------
     def fit(self, X):
         self._initialize_parameters(X)
         self.log_likelihoods_ = []
@@ -181,16 +198,16 @@ class GMM:
 
         return self
 
-    # ---------- Prediction ----------
+    # ---------- Predict ----------
     def predict(self, X):
         resp, _ = self._e_step(X)
         return np.argmax(resp, axis=1)
 
     def score(self, X):
         _, log_likelihood = self._e_step(X)
-        return log_likelihood  # sum log-likelihood
+        return log_likelihood
 
-    # ----------------- Number of parameters -----------------
+    # ---------- Number of parameters ----------
     def _num_parameters(self):
         n_features = self.means_.shape[1]
         K = self.K
@@ -205,14 +222,10 @@ class GMM:
         else:
             raise ValueError("Invalid covariance type")
 
-    # ----------------- AIC & BIC -----------------
+    # ---------- AIC & BIC ----------
     def aic(self, X):
-        L = self.score(X)
-        p = self._num_parameters()
-        return 2 * p - 2 * L
+        return 2 * self._num_parameters() - 2 * self.score(X)
 
     def bic(self, X):
-        L = self.score(X)
-        p = self._num_parameters()
         N = X.shape[0]
-        return np.log(N) * p - 2 * L
+        return np.log(N) * self._num_parameters() - 2 * self.score(X)
