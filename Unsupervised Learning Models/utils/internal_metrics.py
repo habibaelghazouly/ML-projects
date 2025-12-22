@@ -98,3 +98,57 @@ def best_k_by_gap(gaps: list, sks: list, ks: list):
         if gaps[i] >= gaps[i + 1] - sks[i + 1]:
             return ks[i]
     return ks[-1]
+
+def davies_bouldin_index(X, labels):
+    X = np.array(X)
+    labels = np.array(labels)
+    clusters = np.unique(labels)
+    K = len(clusters)
+
+    # Compute cluster centroids
+    centroids = np.array([X[labels == k].mean(axis=0) for k in clusters])
+    
+    # Compute intra-cluster distances
+    S = np.zeros(K)
+    for i, k in enumerate(clusters):
+        cluster_points = X[labels == k]
+        S[i] = np.mean(np.linalg.norm(cluster_points - centroids[i], axis=1))
+    
+    # Compute pairwise centroid distances
+    M = np.zeros((K, K))
+    for i in range(K):
+        for j in range(K):
+            if i != j:
+                M[i, j] = np.linalg.norm(centroids[i] - centroids[j])
+    
+    # Compute DBI
+    R = np.zeros((K, K))
+    for i in range(K):
+        for j in range(K):
+            if i != j:
+                R[i, j] = (S[i] + S[j]) / M[i, j]
+    DB = np.mean(np.max(R, axis=1))
+    return DB
+
+def calinski_harabasz_index(X, labels):
+    X = np.array(X)
+    labels = np.array(labels)
+    N, n_features = X.shape
+    clusters = np.unique(labels)
+    K = len(clusters)
+
+    # Overall mean
+    global_mean = X.mean(axis=0)
+
+    # Between-cluster dispersion
+    B = 0
+    W = 0
+    for k in clusters:
+        cluster_points = X[labels == k]
+        n_k = cluster_points.shape[0]
+        centroid = cluster_points.mean(axis=0)
+        B += n_k * np.sum((centroid - global_mean) ** 2)
+        W += np.sum(np.linalg.norm(cluster_points - centroid, axis=1) ** 2)
+
+    CH = (B / (K - 1)) / (W / (N - K))
+    return CH
