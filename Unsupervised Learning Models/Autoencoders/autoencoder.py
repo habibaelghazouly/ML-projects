@@ -1,6 +1,9 @@
+from mimetypes import init
 import numpy as np
-from activations import activations
-from loss import compute_mse_loss
+import torch
+from .activations import activations
+from .loss import compute_mse_loss
+import torch.nn.init as init
 
 class Autoencoder:
     # layers [input => h1 => ... => bottleneck => ... h1 => output]
@@ -11,11 +14,13 @@ class Autoencoder:
     #     self.lamda = lamda
     #     self.L = len(layers_dims) - 1  # Number of layers (arrows) , array feha nodes : number of neurons fe kol layer
        
-    def __init__(self , input_dim , hidden_layers , bottleneck , activation='relu' , lr=0.01 , lamda=0.1):
+    def __init__(self , input_dim , hidden_layers , bottleneck , activation='tanh' , lr=0.01 , lamda=0.1, seed=42):
         
         self.lr = lr
         self.lamda = lamda
         self.activation = activation
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
         # build encoder + bottleneck + decoder (inverse)
         encoder_layers = hidden_layers
@@ -27,7 +32,19 @@ class Autoencoder:
         self.biases = []
 
         # initialize random weights and zero biases
-        self.weights = [np.random.randn(layer_dims[i+1], layer_dims[i]) * 0.01 for i in range(self.num_layers)]
+        
+        self.weights = []
+        for i in range(self.num_layers):
+            fan_in = layer_dims[i]
+            fan_out = layer_dims[i+1]
+
+            # create torch weight tensor
+            w = torch.empty(fan_out, fan_in)
+            init.xavier_uniform_(w)
+
+            # convert back to numpy
+            self.weights.append(w.detach().cpu().numpy())
+
         self.biases = [np.zeros((layer_dims[i+1], 1)) for i in range(self.num_layers)]
     
     
@@ -53,22 +70,22 @@ class Autoencoder:
 
     # step decay learning rate    
     def lr_schedule(self, epoch, initial_lr, decay_rate = 0.01, step_size=10):
-        return initial_lr * (decay_rate ** (epoch // step_size))
+        return initial_lr / (1 + decay_rate * (epoch // step_size))
   
     
     def forward(self, x):
-        self.z = [] 
+        self.a = [] 
         self.h = [x] # activations
 
 
         for l in range(self.num_layers):
-            z = self.weights[l] @ self.h[-1] + self.biases[l]
-            self.z.append(z)
+            a = self.weights[l] @ self.h[-1] + self.biases[l]
+            self.a.append(a)
 
             if l == self.num_layers - 1:
-                self.h.append(z)  # linear output
+                self.h.append(a)  # linear output
             else:
-                self.h.append(self.activate(z))
+                self.h.append(self.activate(a))
 
         # returns the reconstructed output
         return self.h[-1]
@@ -83,11 +100,11 @@ class Autoencoder:
 
         for l in reversed(range(self.num_layers)):
             grads_w[l] = (delta @ self.h[l].T) / m
-            grads_b[l] = np.sum(delta, axis=1, keepdims=True) 
+            grads_b[l] = np.sum(delta, axis=1, keepdims=True)/m
 
             if l > 0:
                 delta = (self.weights[l].T @ delta) * self.deriv_activate(self.a[l-1])
-                grads_w[l] += (self.lamda) * self.weights[l]  # L2 regularization
+                #grads_w[l] += (self.lamda) * self.weights[l]  # L2 regularization
 
         # Update weights and biases
         for l in range(self.num_layers):
@@ -97,11 +114,14 @@ class Autoencoder:
         return grads_w , grads_b
         
     def train(self, x , epochs, batch_size , schedule=True , decay_rate=0.01):
-        n = x.shape[1]
+        n = x.shape[0]
+        x = x.T  # Transpose for easier batch processing
+        losses = []
+
         for epoch in range(epochs):
             permutation = np.random.permutation(n)
             x_shuffled = x[:, permutation]
-
+            
             epoch_loss = 0
 
             for i in range(0, n, batch_size):
@@ -114,10 +134,24 @@ class Autoencoder:
                 # Backward pass
                 grads_w, grads_b = self.backward(x_batch)
 
-                if schedule:
-                    self.lr = self.lr_schedule(epoch, self.lr, decay_rate , step_size=10)
+            losses.append(epoch_loss)
+
+            if schedule:
+                self.lr = self.lr_schedule(epoch, self.lr, decay_rate , step_size=10)
 
             print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}") 
-
+            print(f"Learning Rate: {self.lr:.6f}")
+            print("-" * 30)
+        return losses
+   
     def predict(self, x):
-        return self.forward(x)      
+        x = np.asarray(x)
+        # ensure x_in has shape (features, samples)
+        if x.ndim == 1:
+            x = x.reshape(1, -1)
+        if x.shape[0] == self.weights[0].shape[1]:
+            x_in = x  # already (features, samples)
+        else:
+            x_in = x.T  # convert (samples, features) -> (features, samples)
+        x_hat = self.forward(x_in)
+        return x_hat.T  # return (samples, features)
