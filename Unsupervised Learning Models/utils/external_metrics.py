@@ -104,3 +104,19 @@ def purity_score(labels_true, labels_pred):
         purity += most_common
     
     return purity / n
+
+def confusion_matrix(labels_true, labels_pred):
+    labels_true = np.asarray(labels_true)
+    labels_pred = np.asarray(labels_pred)
+
+    classes_true = np.unique(labels_true)
+    classes_pred = np.unique(labels_pred)
+
+    ct = {c: i for i, c in enumerate(classes_true)}
+    cp = {c: j for j, c in enumerate(classes_pred)}
+
+    M = np.zeros((len(classes_true), len(classes_pred)), dtype=int)
+    for t, p in zip(labels_true, labels_pred):
+        M[ct[t], cp[p]] += 1
+
+    return M, classes_true, classes_pred
